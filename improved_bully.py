@@ -3,11 +3,10 @@ from multiprocessing import Process, Value
 from ctypes import c_uint
 from multiprocessing.sharedctypes import SynchronizedBase
 from threading import Thread, Timer
-from time import sleep
+from time import sleep, time
 import socket
 import random
 from argparse import ArgumentParser
-
 
 class Node(Process):
     def __init__(self, 
@@ -29,9 +28,13 @@ class Node(Process):
         self.coordinator_id = coordinator_id
         self.coordinator_id.value = id
         self.timer = None
+        
+        self.running_election = False
         self.has_announced = False
-
-        self.alive_check = False        
+        
+        self.delay = 0.01
+        
+        self.last_announce_time = 0
 
         super().__init__()
 
@@ -80,36 +83,60 @@ class Node(Process):
                 return
     
     def msg_received_rua(self, sender_id):
+        """
+        Code runs if the sender has a lower ID than the receiver
+        Then the receiving node will send out a "coordinator" message.
+        """
         if sender_id < self.node_id: 
-            self.alive_check = True
             self.announce_coordinator()
     
     def msg_received_coordinator(self, sender_id):
-        self.coordinator_id.value = sender_id
+        """
+        If the sender has a lower ID than the receiver, a mistake was made and a new election occurs.
+        If the sender has a higher ID than the receiver, any posibly running elections stops and the 
+        new coordinator is the sender.
+        """
+        if sender_id < self.node_id:
+            self.check_alive()
+        else:
+            self.coordinator_id.value = sender_id
+            self.running_election = False
 
     def check_alive(self):
-        for peer_id in range(self.num_nodes, -1, -1):
-            if self.alive_check:
-                return
-                
-            self.timer = Timer(.1*self.num_nodes, self.announce_coordinator)
-            self.timer.start()
-
+        """
+        Itteratively send an "are you alive" (rua) message to every node, while an election is running.
+        When an election stops running, return void.
+        """
+        self.running_election = True
+        
+        bigger_nodes = list(range(self.node_id, self.num_nodes))
+        for peer_id in bigger_nodes[::-1]: # iterate backwards
             self.send_message(bytes(f"are_you_alive {self.node_id}", encoding="UTF8"), peer_id)
-            
+            sleep(self.delay*10)
+            if not self.running_election: # We have received a coordinator message
+                return
+        
+        # When no response is received from any higher nodes
+        self.running_election = False
+        self.announce_coordinator()
+
 
     def announce_coordinator(self):
-        self.print2(f"Announcing coordinator {self.node_id}")
+        if (self.last_announce_time + self.delay * self.num_nodes * 10) > time():
+            return
+        self.last_announce_time = time()
+        
+        self.print2(f"Announcing coordinator {self.node_id} delta_t: {time() - self.last_announce_time}")
         for peer_id in range(self.num_nodes):
             self.send_message(bytes(f"coordinator {self.node_id}", encoding="UTF8"), peer_id)
-            sleep(.01)
+            sleep(self.delay)
         self.has_announced = True
     
     def send_message(self, msg:bytes, receiver_id):
-        sleep(.01)
+        # self.print2(self.node_id, "is sending", msg, "to", receiver_id)
+        sleep(self.delay)
         port = self.base_port + receiver_id
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.settimeout(5)
             sock.sendto(msg, ("127.0.0.1", port))
             if not self.message_count is None:
                 self.message_count.value += 1

@@ -1,11 +1,11 @@
-from threading import Thread
-import unittest
-from standard_bully import Node
 from ctypes import c_uint
 from multiprocessing import Value
-import socket
 from queue import Queue
+from standard_bully import Node
+from threading import Thread
 from time import sleep
+import socket
+import unittest
 
 def test_integration(num_procs, alive_nodes, starter_nodes):
     processes = []
@@ -80,13 +80,13 @@ class TestBully(unittest.TestCase):
         starter_nodes = [0]
       
         message_counts, coordinator_ids = test_integration(num_procs, alive_nodes, starter_nodes)
-          
+
         for node, count in zip(alive_nodes, message_counts):
             print(f"Node {node} sent {count.value} messages")
         print("")
         for node, coordinator in zip(alive_nodes, coordinator_ids):
             print(f"Node {node} sees {coordinator.value} as coordinator")
-      
+
         for c in coordinator_ids:
             self.assertEqual(c.value, max(alive_nodes))
     
@@ -158,7 +158,6 @@ class TestBully(unittest.TestCase):
         self.assertEqual(len(expected_msgs), 0)
         self.assertEqual(len(unexpected_msgs), 0)
 
-
     def test_send_message(self):
         q = Queue()
         t = Thread(target=listen, args=(5000, 1, q))
@@ -169,7 +168,6 @@ class TestBully(unittest.TestCase):
         
         sleep(.5)
         self.assertEqual(q.get(), (1, b"hello"))
-    
     
     def test_run_election(self):
         # setup node
@@ -210,10 +208,9 @@ class TestBully(unittest.TestCase):
         num_nodes = 5
         node_id = 2
         n, q, ls = base_unit_test_setup(num_nodes, node_id, msg_count=2)
+        
         n.run_election()
-        
         sleep(.1)
-        
         n.msg_received_ok(3)
         
         n.timer.join()
@@ -236,7 +233,7 @@ class TestBully(unittest.TestCase):
         
         self.assertEqual(len(expected_msgs), 0)
         self.assertEqual(len(unexpected_msgs), 0)
-    
+        
     def test_announce_coordinator(self):
         # Assert that all nodes received the message
         num_nodes = 5
@@ -260,7 +257,6 @@ class TestBully(unittest.TestCase):
         
         self.assertEqual(len(expected_msgs), 0)
         self.assertEqual(len(unexpected_msgs), 0)
-    
     
     def test_election_recevied_smaller(self):
         # If election message is received from smaller node, reply ok
@@ -312,44 +308,6 @@ class TestBully(unittest.TestCase):
         
         self.assertEqual(len(expected_msgs), 0)
         self.assertEqual(len(unexpected_msgs), 0)
-        pass
-    
-    def test_ok_received(self):
-        # If ok message is received, stop election and cancel announce timer
-        num_nodes = 5
-        node_id = 2
-        n, q, ls = base_unit_test_setup(num_nodes, node_id, msg_count=2)
-        
-        ### Testing between here
-        
-        n.run_election()
-        sleep(.1)
-        n.msg_received_ok(3)
-        
-        n.timer.join() # Wait for timer to finish or get cancelled
-        
-        ### and here
-        
-        for l in ls:
-            l.join()
-        
-        expected_msgs = [
-            (3, b"election 2"),
-            (4, b"election 2"),
-        ]
-        unexpected_msgs = []
-        
-        while not q.empty():
-            item = q.get()
-            print(item)
-            if item in expected_msgs:
-                expected_msgs.remove(item)
-            else:
-                unexpected_msgs.append(item)
-        
-        self.assertEqual(len(expected_msgs), 0)
-        self.assertEqual(len(unexpected_msgs), 0)
-        pass
     
     def test_coordinator_received(self):
         # If coordinator message is received, set coordinator id and stop the node
@@ -383,39 +341,7 @@ class TestBully(unittest.TestCase):
         self.assertEqual(len(expected_msgs), 0)
         self.assertEqual(len(unexpected_msgs), 0)
         pass
-        
-        
 
-    def test_node_ok_message(self):
-        num_nodes = 5
-        port = 5000
-        msg_count = Value(c_uint)
-        cord_id = Value(c_uint)
-        test_node_id = 3
-        n = Node(test_node_id, num_nodes, port, False, msg_count, cord_id)
-        n.start()
-        
-        msg_queue = Queue()
-        listeners = []
-        for i in range(num_nodes):
-            if i != test_node_id:
-                l = Thread(target=listen, args=(port, i, msg_queue, 5, 1))
-                l.start()
-                listeners.append(l)
-        
-        sleep(0.5)
-        send_message(b"coordinator 1", port + test_node_id)
-        
-        for l in listeners:
-            l.join()
-            
-        n.join()
-        
-        while not msg_queue.empty():
-            msg = msg_queue.get()
-            print(msg)
-        
-        
 
 # run the test
 if __name__ == "__main__":
