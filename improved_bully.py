@@ -112,7 +112,7 @@ class Node(Process):
         bigger_nodes = list(range(self.node_id, self.num_nodes))
         for peer_id in bigger_nodes[::-1]: # iterate backwards
             self.send_message(bytes(f"are_you_alive {self.node_id}", encoding="UTF8"), peer_id)
-            sleep(self.delay*10)
+            sleep(self.delay)
             if not self.running_election: # We have received a coordinator message
                 return
         
@@ -122,19 +122,17 @@ class Node(Process):
 
 
     def announce_coordinator(self):
-        if (self.last_announce_time + self.delay * self.num_nodes * 10) > time():
+        if (self.last_announce_time + 1) > time():
             return
         self.last_announce_time = time()
         
         self.print2(f"Announcing coordinator {self.node_id} delta_t: {time() - self.last_announce_time}")
         for peer_id in range(self.num_nodes):
             self.send_message(bytes(f"coordinator {self.node_id}", encoding="UTF8"), peer_id)
-            sleep(self.delay)
         self.has_announced = True
     
     def send_message(self, msg:bytes, receiver_id):
         # self.print2(self.node_id, "is sending", msg, "to", receiver_id)
-        sleep(self.delay)
         port = self.base_port + receiver_id
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.sendto(msg, ("127.0.0.1", port))
@@ -209,6 +207,7 @@ if __name__ == "__main__":
         print(f"Coordinator: {coordinator_ids[0].value}")
     else:
         print("No coordinator elected")
+        print(f"Coordinators: {[v.value for v in coordinator_ids]}")
     print("")
     print(f"{num_proc = }")
     print(f"{alive_nodes = }")
