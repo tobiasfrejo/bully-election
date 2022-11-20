@@ -6,6 +6,10 @@ from threading import Thread
 from time import sleep
 import socket
 import unittest
+import argparse
+import logging
+
+logger = logging.getLogger(__name__)
 
 def test_integration(num_procs, alive_nodes, starter_nodes):
     processes = []
@@ -30,7 +34,7 @@ def test_integration(num_procs, alive_nodes, starter_nodes):
     return message_counts, coordinator_ids
 
 def send_message(msg, port):
-    print(f"Sending {msg} to {port}")
+    logger.debug(f"Sending {msg} to {port}")
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.sendto(msg, ("127.0.0.1", port))
 
@@ -43,7 +47,7 @@ def listen(base_port, id, queue, count=1, timeout=1):
             try:
                 data, addr = sock.recvfrom(1024)
                 queue.put((id, data))
-                print(f"Node {id} received {data}")
+                logger.debug(f"Node {id} received {data}")
             except socket.timeout:
                 pass
 
@@ -82,10 +86,9 @@ class TestBully(unittest.TestCase):
         message_counts, coordinator_ids = test_integration(num_procs, alive_nodes, starter_nodes)
 
         for node, count in zip(alive_nodes, message_counts):
-            print(f"Node {node} sent {count.value} messages")
-        print("")
+            logger.debug(f"Node {node} sent {count.value} messages")
         for node, coordinator in zip(alive_nodes, coordinator_ids):
-            print(f"Node {node} sees {coordinator.value} as coordinator")
+            logger.debug(f"Node {node} sees {coordinator.value} as coordinator")
 
         for c in coordinator_ids:
             self.assertEqual(c.value, max(alive_nodes))
@@ -98,10 +101,9 @@ class TestBully(unittest.TestCase):
         message_counts, coordinator_ids = test_integration(num_procs, alive_nodes, starter_nodes)
           
         for node, count in zip(alive_nodes, message_counts):
-            print(f"Node {node} sent {count.value} messages")
-        print("")
+            logger.debug(f"Node {node} sent {count.value} messages")
         for node, coordinator in zip(alive_nodes, coordinator_ids):
-            print(f"Node {node} sees {coordinator.value} as coordinator")
+            logger.debug(f"Node {node} sees {coordinator.value} as coordinator")
       
         for c in coordinator_ids:
             self.assertEqual(c.value, max(alive_nodes))
@@ -114,10 +116,9 @@ class TestBully(unittest.TestCase):
         message_counts, coordinator_ids = test_integration(num_procs, alive_nodes, starter_nodes)
           
         for node, count in zip(alive_nodes, message_counts):
-            print(f"Node {node} sent {count.value} messages")
-        print("")
+            logger.debug(f"Node {node} sent {count.value} messages")
         for node, coordinator in zip(alive_nodes, coordinator_ids):
-            print(f"Node {node} sees {coordinator.value} as coordinator")
+            logger.debug(f"Node {node} sees {coordinator.value} as coordinator")
       
         for c in coordinator_ids:
             self.assertEqual(c.value, max(alive_nodes))
@@ -128,7 +129,7 @@ class TestBully(unittest.TestCase):
         # assert election messages are sent from node
         num_nodes = 5
         node_id = 2
-        n, q, ls = base_unit_test_setup(num_nodes, node_id, msg_count=2, port=4000)
+        n, q, ls = base_unit_test_setup(num_nodes, node_id, msg_count=3, port=4000)
         
         n.start()
         sleep(.5)
@@ -136,6 +137,7 @@ class TestBully(unittest.TestCase):
         
         for l in ls:
             l.join()
+        n.join()
         
         expected_msgs = [
             (0, b"OK 2"),
@@ -173,7 +175,7 @@ class TestBully(unittest.TestCase):
         # setup node
         # run_election()
         # assert election messages are sent from node
-        print("test_run_election")
+        logger.debug("test_run_election")
         num_nodes = 5
         node_id = 2
         n, q, ls = base_unit_test_setup(num_nodes, node_id, msg_count=2)
@@ -204,7 +206,7 @@ class TestBully(unittest.TestCase):
         # reply to election message with ok
         # assert election is over
         # assert no more messages are sent
-        print("test_stop_election_at_ok")
+        logger.debug("test_stop_election_at_ok")
         num_nodes = 5
         node_id = 2
         n, q, ls = base_unit_test_setup(num_nodes, node_id, msg_count=2)
@@ -300,7 +302,7 @@ class TestBully(unittest.TestCase):
         
         while not q.empty():
             item = q.get()
-            print(item)
+            logger.debug(item)
             if item in expected_msgs:
                 expected_msgs.remove(item)
             else:
@@ -332,7 +334,7 @@ class TestBully(unittest.TestCase):
         
         while not q.empty():
             item = q.get()
-            print(item)
+            logger.debug(item)
             if item in expected_msgs:
                 expected_msgs.remove(item)
             else:
@@ -345,4 +347,10 @@ class TestBully(unittest.TestCase):
 
 # run the test
 if __name__ == "__main__":
-    unittest.main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
+    args = parser.parse_args()
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+        
+    unittest.main(verbosity=2)

@@ -86,7 +86,9 @@ class Node(Process):
             self.run_election()
     
     def msg_received_coordinator(self, sender_id):
+        #self.print2(f"Coordinator received from {sender_id} by {self.node_id}")
         self.coordinator_id.value = sender_id
+        
     
     def msg_received_ok(self, sender_id):
         self.print2(f"OK received from {sender_id} by {self.node_id}", end="")
@@ -108,7 +110,7 @@ class Node(Process):
             self.running_election = True
             self.print2(f"Starting election on {self.node_id}")
             
-            self.timer = Timer(.1*self.num_nodes, self.announce_coordinator)
+            self.timer = Timer(.2*self.num_nodes, self.announce_coordinator)
             self.timer.start()
             
             for peer_id in range(self.node_id+1, self.num_nodes):
@@ -119,7 +121,6 @@ class Node(Process):
         self.print2(f"Announcing coordinator {self.node_id}")
         for peer_id in range(self.num_nodes):
             self.send_message(bytes(f"coordinator {self.node_id}", encoding="UTF8"), peer_id)
-            sleep(.01)
         self.running_election = False
         self.has_announced = True
     
@@ -192,8 +193,8 @@ if __name__ == "__main__":
         p.join()
     
     print("")
-    for node, count in zip(alive_nodes, message_counts):
-        print(f"{node} sent {count.value} messages")
+    for node, count, coord in zip(alive_nodes, message_counts, coordinator_ids):
+        print(f"{node} sent {count.value} messages, and got coordinator {coord.value}")
     print(f"Total messages sent: {sum(count.value for count in message_counts)}")
     print("")
     if all(coordinator_ids[0].value == coordinator_id.value for coordinator_id in coordinator_ids):

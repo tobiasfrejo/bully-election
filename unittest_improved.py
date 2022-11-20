@@ -38,7 +38,12 @@ def send_message(msg, port):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.sendto(msg, ("127.0.0.1", port))
 
-def listen(base_port, id, queue, count=1, timeout=1):
+def listen(base_port, 
+           id, 
+           queue, 
+           count=1, 
+           timeout=1, 
+           responder:list[tuple[str,str,int]]=None):
     port = base_port + id
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind(("127.0.0.1", port))
@@ -48,17 +53,32 @@ def listen(base_port, id, queue, count=1, timeout=1):
                 data, addr = sock.recvfrom(1024)
                 queue.put((id, data))
                 logger.debug(f"Node {id} received {data}")
+                
+                if responder:
+                    for rec_msg, send_msg, dst in responder:
+                        if rec_msg == data:
+                            logger.debug(f"Responding to {data} with {send_msg}")
+                            send_message(send_msg, base_port+dst)
             except socket.timeout:
                 pass
 
-def base_unit_test_setup(num_nodes, test_node_id, msg_count=5, listener_timeout=1, port = 4000, silent=True):
+def base_unit_test_setup(num_nodes, 
+                         test_node_id, 
+                         msg_count=5, 
+                         listener_timeout=1, 
+                         port = 4000, 
+                         silent=True, 
+                         responders:dict[int,list[tuple[str,str,int]]]=None):
     n = Node(test_node_id, num_nodes, port, False, Value(c_uint), Value(c_uint), silent=silent)
     
     q = Queue()
     listeners = []
     for i in range(num_nodes):
         if i != test_node_id:
-            l = Thread(target=listen, args=(port, i, q, msg_count, listener_timeout))
+            if responders and i in responders:
+                l = Thread(target=listen, args=(port, i, q, msg_count, listener_timeout, responders[i]))
+            else:
+                l = Thread(target=listen, args=(port, i, q, msg_count, listener_timeout))
             l.start()
             listeners.append(l)
     
@@ -217,17 +237,26 @@ class TestBully(unittest.TestCase):
         num_nodes = 5
         node_id = 2
         port = 5000
-        n, q, ls = base_unit_test_setup(num_nodes, node_id, port=port)
+        n, q, ls = base_unit_test_setup(num_nodes, 
+                                        node_id, 
+                                        port=port, 
+                                        responders = 
+                                            {
+                                                4: [
+                                                    (b"are_you_alive 2", b"coordinator 4", 2)
+                                                ]
+                                            }
+                                        )
 
         n.is_starter = True
         n.start()
 
-        starter_delay = .1  # Delay before a starter node starts the election
-        rua_delay = n.delay # Timeout before next RUA is sent
-        delay = starter_delay + rua_delay*0.5 # to send message during the first iteration of the node's wait loop
+        # starter_delay = .1  # Delay before a starter node starts the election
+        # rua_delay = n.delay*4 # Timeout before next RUA is sent
+        # delay = starter_delay + rua_delay*0.5 # to send message during the first iteration of the node's wait loop
 
-        sleep(delay)
-        send_message(b"coordinator 4", port+node_id)
+        # sleep(delay)
+        # send_message(b"coordinator 4", port+node_id)
         
         for l in ls:
             l.join()
@@ -254,17 +283,19 @@ class TestBully(unittest.TestCase):
         num_nodes = 5
         node_id = 2 # ID of tested node
         port = 5000
-        n, q, ls = base_unit_test_setup(num_nodes, node_id, port=port)
+        n, q, ls = base_unit_test_setup(num_nodes, 
+                                        node_id, 
+                                        port=port, 
+                                        responders = 
+                                            {
+                                                3: [
+                                                    (b"are_you_alive 2", b"coordinator 3", 2)
+                                                ]
+                                            }
+                                        )
         
         n.is_starter = True
         n.start()
-
-        starter_delay = .1  # Delay before a starter node starts the election
-        rua_delay = n.delay # Timeout before next RUA is sent
-        delay = starter_delay + rua_delay*1.5 # to send message during the second iteration of the node's wait loop
-
-        sleep(delay)
-        send_message(b"coordinator 3", port+node_id)
         
         for l in ls:
             l.join()
@@ -333,7 +364,7 @@ class TestBully(unittest.TestCase):
         n, q, ls = base_unit_test_setup(num_nodes, node_id, port=port)
 
         n.start()
-        sleep(.05)
+        sleep(.1)
         send_message(b"are_you_alive 1", port+node_id)
 
         for l in ls:
@@ -363,7 +394,7 @@ class TestBully(unittest.TestCase):
         n, q, ls = base_unit_test_setup(num_nodes, node_id, port=port)
 
         n.start()
-        sleep(.05)
+        sleep(.1)
         send_message(b"are_you_alive 4", port+node_id)
 
         sleep(2)
@@ -397,3 +428,4 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.DEBUG)
         
     unittest.main(verbosity=2)
+    #TestBully().test_run_election_largest()

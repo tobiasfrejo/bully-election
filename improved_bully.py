@@ -112,7 +112,7 @@ class Node(Process):
         bigger_nodes = list(range(self.node_id, self.num_nodes))
         for peer_id in bigger_nodes[::-1]: # iterate backwards
             self.send_message(bytes(f"are_you_alive {self.node_id}", encoding="UTF8"), peer_id)
-            sleep(self.delay)
+            sleep(self.delay*(2*self.node_id+self.num_nodes))
             if not self.running_election: # We have received a coordinator message
                 return
         
@@ -132,7 +132,8 @@ class Node(Process):
         self.has_announced = True
     
     def send_message(self, msg:bytes, receiver_id):
-        # self.print2(self.node_id, "is sending", msg, "to", receiver_id)
+        self.print2(self.node_id, "is sending", msg, "to", receiver_id)
+        sleep(self.delay)
         port = self.base_port + receiver_id
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.sendto(msg, ("127.0.0.1", port))
